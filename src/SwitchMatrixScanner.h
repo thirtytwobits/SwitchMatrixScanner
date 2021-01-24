@@ -22,8 +22,8 @@
     SOFTWARE.
 */
 
-#ifndef IO_THIRTYTWOBITS_SWITCH_MATRIX_SCANNER_H
-#define IO_THIRTYTWOBITS_SWITCH_MATRIX_SCANNER_H
+#ifndef GH_THIRTYTWOBITS_SWITCH_MATRIX_SCANNER_H
+#define GH_THIRTYTWOBITS_SWITCH_MATRIX_SCANNER_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -383,4 +383,4 @@ private:
 };  // namespace thirtytwobits
 };  // namespace gh
 
-#endif  // IO_THIRTYTWOBITS_SWITCH_MATRIX_SCANNER_H
+#endif  // GH_THIRTYTWOBITS_SWITCH_MATRIX_SCANNER_H
