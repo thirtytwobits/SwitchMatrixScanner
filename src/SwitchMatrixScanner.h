@@ -50,18 +50,58 @@ struct SwitchDef
 };  // namespace
 
 /**
- * Raw swtch matrix scanning logic with optional software debounce.
+ * Raw switch matrix scanning logic with optional software debounce for Arduino.
+ *
+ * Example:
+ *
+ *      const byte rowPins[ROWS] = {A0, A1};
+ *      const byte colPins[COLS] = {A2, 4, 5, 6, 7, 8, 9};
+ *
+ *      gh::thirtytwobits::SwitchMatrixScanner<ROWS, COLS> scanner(
+ *          rowPins,
+ *          colPins,
+ *          true,  // enable pullups for the column pins.
+ *          true   // enable software debouncing logic. Many MCUs can provide debouncing in-hardware but Arduino doesn't
+ *                 // support this so we'll do it in software.
+ *      );
+ *
  */
 template <size_t ROW_COUNT, size_t COL_COUNT, size_t EVENT_BUFFER_SIZE = 10>
 class SwitchMatrixScanner final
 {
 public:
+    /**
+     * Use this as the callback type if using event callbacks.
+     *
+     * Example:
+     *
+     *      void onKeyDown(const uint16_t (&scancodes)[decltype(scanner)::event_buffer_size], size_t scancodes_len)
+     *      {
+     *          for (size_t i = 0; i < scancodes_len; ++i)
+     *               {
+     *              const char typed_character = my_keymap[scancodes[i] - 1];
+     *              // Use Keyboard.h or something else
+     *          }
+     *      }
+     */
     using SwitchHandler = void (*)(const uint16_t (&scancodes)[EVENT_BUFFER_SIZE], size_t scancodes_len);
 
     static constexpr size_t event_buffer_size = EVENT_BUFFER_SIZE;
     static constexpr size_t row_count         = ROW_COUNT;
     static constexpr size_t col_count         = COL_COUNT;
 
+    /**
+     * Required constructor.
+     * 
+     * @param  row_pins Array of Arduino pin ids for each row in the keyboard matrix.
+     * @param  column_pins Array of Arduino pin ids for each column in the keyboard matrix.
+     * @param  enable_pullups   If true then INPUT_PULLUPS will be used for row pins otherwise
+     *                          INPUT will be used with the expectation that the hardware has
+     *                          pullups.
+     * @param  enable_software_debounce If true then this object will track samples of switches over
+     *                          time adding some hysteresis and deboouncing logic. If false then
+     *                          the class will use single samples to determine switch state.
+     */
     SwitchMatrixScanner(const uint8_t (&row_pins)[ROW_COUNT],
                         const uint8_t (&column_pins)[COL_COUNT],
                         const bool enable_pullups           = true,
@@ -96,6 +136,11 @@ public:
     SwitchMatrixScanner& operator=(const SwitchMatrixScanner&) = delete;
     SwitchMatrixScanner& operator=(const SwitchMatrixScanner&&) = delete;
 
+    /**
+     * Call from within the Arduino setup function. If handlers are provided they will be invoked
+     * from within the scan method. If omitted the sketch must use the isSwitchClosed method to determine
+     * switch state.
+     */
     void setup(SwitchHandler switchclosed_handler = nullptr, SwitchHandler switchopen_handler = nullptr)
     {
         m_switchhandler_closed = switchclosed_handler;
@@ -111,6 +156,11 @@ public:
         }
     }
 
+    /**
+     * Call from within the Arduino loop method. When debouncing is enabled it is important to call
+     * this in a fast loop and at a regular period. Variable timing will cause weird delays to users
+     * of a keyboard where some keystrokes will be missed or will occur late.
+     */
     void scan()
     {
         for (size_t r = 0; r < ROW_COUNT; ++r)
@@ -122,7 +172,7 @@ public:
             {
                 SwitchDef& swtch = m_switch_map[r][c];
                 // Always sample to ensure the timing is stable despite hyteresis settings.
-                const int value              = digitalRead(m_col_pins[c]);
+                const int  value             = digitalRead(m_col_pins[c]);
                 const bool is_switch_pressed = (value == LOW);
                 if (m_enable_software_debounce)
                 {
@@ -158,6 +208,19 @@ public:
         flush_opened_events();
     }
 
+    /**
+     * Determine the switch state for a given scancode. Scancodes are generated internally
+     * based on the row and column count and are 1-based. For example, if a matrix has three
+     * rows and three columns the scancodes will be:
+     * 
+     *     +-----------+
+     *     | 1 | 2 | 3 |
+     *     +-----------+
+     *     | 4 | 5 | 6 |
+     *     +-----------+
+     *     | 7 | 8 | 9 |
+     *     +-----------+
+     */
     bool isSwitchClosed(uint16_t scancode)
     {
         if (scancode == 0)
