@@ -38,7 +38,7 @@
 */
 
 #include <SwitchMatrixScanner.h>  // This library
-#include <Keyboard.h>                                                                 // From Arduino
+#include <Keyboard.h>             // From Arduino
 
 // Declare how many keys are on the keyboard
 const byte ROWS = 2;
@@ -90,6 +90,25 @@ gh::thirtytwobits::SwitchMatrixScanner<ROWS, COLS> scanner(
 // Why do you get more than one switch event per call? This is a form of [Vector
 // IO](https://en.wikipedia.org/wiki/Vectored_I/O) which is a more efficient then making a function call per switch.
 //
+// Scancode to Key-switch Map for the [Sparkfun QWIIC Keyboard Explorer](https://www.sparkfun.com/products/17251)
+//      _______ _______ _______ _______ _______ _______ _______
+//     |\     /|\     /|\     /|\     /|\     /|\     /|\     /|
+//     | +---+ | +---+ | +---+ | +---+ | +---+ | +---+ | +---+ |
+//     | |   | | |   | | |   | | |   | | |   | | |   | | |   | |
+//     | |1  | | |2  | | |3  | | |4  | | |5  | | |6  | | |7  | |
+//     | +---+ | +---+ | +---+ | +---+ | +---+ | +---+ | +---+ |
+//     |/_____\|/_____\|/_____\|/_____\|/_____\|/_____\|/_____\|
+//
+//      _______ _______ _______ _______ _______ _______ _______
+//     |\     /|\     /|\     /|\     /|\     /|\     /|\     /|
+//     | +---+ | +---+ | +---+ | +---+ | +---+ | +---+ | +---+ |
+//     | |   | | |   | | |   | | |   | | |   | | |   | | |   | |
+//     | |8  | | |9  | | |10 | | |11 | | |12 | | |13 | | |14 | |
+//     | +---+ | +---+ | +---+ | +---+ | +---+ | +---+ | +---+ |
+//     |/_____\|/_____\|/_____\|/_____\|/_____\|/_____\|/_____\|
+//
+// > NOTE: scancodes start at 1. 0 Is not a legal scancode for the SwitchMatrixScanner class.
+//
 void onKeyUp(const uint16_t (&scancodes)[decltype(scanner)::event_buffer_size], size_t scancodes_len)
 {
     for (size_t i = 0; i < scancodes_len; ++i)
@@ -119,8 +138,11 @@ void onKeyUp(const uint16_t (&scancodes)[decltype(scanner)::event_buffer_size], 
 }
 
 // Same as the onKeyUp handler but for keydown.
-// Note that you'll get these if the key is down when the sketch starts running. You will *not* get key-up events at the
-// start of the sketch so you are guaranteed to never get a key-up before a key-down for a given key.
+//
+// Note that you'll get these callback if the key is down when the sketch starts running. You will *not* get key-up
+// events at the start of the sketch so you are guaranteed to never get a key-up before a key-down for a given
+// key/scancode.
+//
 void onKeyDown(const uint16_t (&scancodes)[decltype(scanner)::event_buffer_size], size_t scancodes_len)
 {
     for (size_t i = 0; i < scancodes_len; ++i)

@@ -36,9 +36,9 @@ namespace
 {
 enum SwitchState : uint8_t
 {
-    UNKNOWN              = 0,
-    OPEN                 = 1,
-    CLOSED               = 2
+    UNKNOWN = 0,
+    OPEN    = 1,
+    CLOSED  = 2
 };
 
 struct SwitchDef
@@ -56,9 +56,11 @@ template <size_t ROW_COUNT, size_t COL_COUNT, size_t EVENT_BUFFER_SIZE = 10>
 class SwitchMatrixScanner final
 {
 public:
-    typedef void (*SwitchHandler)(const uint16_t (&scancodes)[EVENT_BUFFER_SIZE], size_t scancodes_len);
+    using SwitchHandler = void (*)(const uint16_t (&scancodes)[EVENT_BUFFER_SIZE], size_t scancodes_len);
 
     static constexpr size_t event_buffer_size = EVENT_BUFFER_SIZE;
+    static constexpr size_t row_count         = ROW_COUNT;
+    static constexpr size_t col_count         = COL_COUNT;
 
     SwitchMatrixScanner(const uint8_t (&row_pins)[ROW_COUNT],
                         const uint8_t (&column_pins)[COL_COUNT],
@@ -109,7 +111,6 @@ public:
             const uint8_t col_pin = m_col_pins[c];
             pinMode(col_pin, m_column_input_type);
         }
-        return true;
     }
 
     void scan()
@@ -216,7 +217,7 @@ private:
     // +----------------------------------------------------------------------+
     void flush_opened_events()
     {
-        if(m_scancode_event_buffer_opened_len > 0)
+        if (m_scancode_event_buffer_opened_len > 0)
         {
             onSwitchOpen(m_scancode_event_buffer_opened, m_scancode_event_buffer_opened_len);
             m_scancode_event_buffer_opened_len = 0;
@@ -225,13 +226,12 @@ private:
 
     void flush_closed_events()
     {
-        if(m_scancode_event_buffer_closed_len > 0)
+        if (m_scancode_event_buffer_closed_len > 0)
         {
             onSwitchClosed(m_scancode_event_buffer_closed, m_scancode_event_buffer_closed_len);
             m_scancode_event_buffer_closed_len = 0;
         }
     }
-
 
     static constexpr bool is_closed(const uint8_t sample_mask, const uint8_t sample_buffer)
     {
@@ -243,9 +243,9 @@ private:
         return (sample_mask & sample_buffer) == 0;
     }
 
-    static constexpr void reset_sample_count(SwitchDef& swtch)
+    static constexpr uint8_t reset_sample_count(const SwitchDef& swtch)
     {
-        swtch.sample_buffer = (DebounceSampleMask & swtch.sample_buffer);
+        return (DebounceSampleMask & swtch.sample_buffer);
     }
 
     void handleSoftwareDebounce(SwitchDef& swtch, bool is_switch_pressed)
@@ -269,22 +269,22 @@ private:
         bool pending_event = false;
         if (is_closed(DebounceSampleMask, swtch.sample_buffer) && swtch.state != SwitchState::CLOSED)
         {
-            const SwitchState oldState = swtch.state;
-            swtch.state                = SwitchState::CLOSED;
+            const SwitchState oldState                                           = swtch.state;
+            swtch.state                                                          = SwitchState::CLOSED;
             m_scancode_event_buffer_closed[m_scancode_event_buffer_closed_len++] = swtch.scancode;
-            reset_sample_count(swtch);
-            pending_event = true;
+            swtch.sample_buffer                                                  = reset_sample_count(swtch);
+            pending_event                                                        = true;
         }
         else if (is_open(DebounceSampleMask, swtch.sample_buffer) && swtch.state != SwitchState::OPEN)
         {
             const SwitchState oldState = swtch.state;
-            swtch.state   = SwitchState::OPEN;
+            swtch.state                = SwitchState::OPEN;
             if (oldState == SwitchState::UNKNOWN)
             {
                 m_scancode_event_buffer_opened[m_scancode_event_buffer_opened_len++] = swtch.scancode;
-                pending_event = true;
+                pending_event                                                        = true;
             }
-            reset_sample_count(swtch);
+            swtch.sample_buffer = reset_sample_count(swtch);
         }
         return pending_event;
     }
@@ -308,8 +308,8 @@ private:
     }
 
     SwitchDef     m_switch_map[ROW_COUNT][COL_COUNT];
-    const uint8_t m_row_pins[ROW_COUNT];
-    const uint8_t m_col_pins[COL_COUNT];
+    uint8_t       m_row_pins[ROW_COUNT];
+    uint8_t       m_col_pins[COL_COUNT];
     SwitchHandler m_switchhandler_closed;
     SwitchHandler m_switchhandler_open;
     const uint8_t m_column_input_type;

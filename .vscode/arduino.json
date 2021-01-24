@@ -1,0 +1,7 @@
+{
+    "sketch": "examples/Sparkfun_QWIIC_Keyboard_Explorer/Sparkfun_QWIIC_Keyboard_Explorer.ino",
+    "board": "SparkFun:avr:promicro",
+    "configuration": "cpu=16MHzatmega32U4",
+    "port": "/dev/tty.usbmodem14101",
+    "output": "build"
+}
