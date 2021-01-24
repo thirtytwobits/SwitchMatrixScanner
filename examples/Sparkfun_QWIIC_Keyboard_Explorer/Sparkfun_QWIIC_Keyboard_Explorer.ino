@@ -61,7 +61,7 @@ boolean kbdMode = false;
 // part of the class definition. This allows the author of classes to change the size or type of things based on how
 // the class is used before the code is compiled. This saves a system from having to use CPU time to figure this stuff
 // out and, if the class can't handle the types or if the size of something is too big or small Arduino will tell you
-// this when if verifies the program which is better then trying to figure out why your project isn't working after you
+// this when it verifies the program which is better then trying to figure out why your project isn't working after you
 // upload it. For the SwitchMatrixScanner template, we use the parameters (these are the numbers in the brackets <>) to
 // tell C++ to reserve `ROWS * COLS * 4` bytes of memory inside of the scanner object (where `4` is a coefficient inside
 // of the class: the class uses 4 bytes to track the state of a switch). If your target doesn't have that much memory
