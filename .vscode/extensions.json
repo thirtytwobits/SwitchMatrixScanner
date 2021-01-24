@@ -7,6 +7,7 @@
         "twxs.cmake",
         "ms-vscode.cmake-tools",
         "xaver.clang-format",
-        "vsciot-vscode.vscode-arduino"
+        "vsciot-vscode.vscode-arduino",
+        "vadimcn.vscode-lldb"
     ]
 }

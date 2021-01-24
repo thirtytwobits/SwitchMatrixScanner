@@ -103,13 +103,11 @@ public:
 
         for (size_t r = 0; r < ROW_COUNT; ++r)
         {
-            const uint8_t row_pin = m_row_pins[r];
-            pinMode(row_pin, INPUT);
+            pinMode(m_row_pins[r], INPUT);
         }
         for (size_t c = 0; c < COL_COUNT; ++c)
         {
-            const uint8_t col_pin = m_col_pins[c];
-            pinMode(col_pin, m_column_input_type);
+            pinMode(m_col_pins[c], m_column_input_type);
         }
     }
 
@@ -124,7 +122,7 @@ public:
             {
                 SwitchDef& swtch = m_switch_map[r][c];
                 // Always sample to ensure the timing is stable despite hyteresis settings.
-                const bool value             = digitalRead(m_col_pins[c]);
+                const int value              = digitalRead(m_col_pins[c]);
                 const bool is_switch_pressed = (value == LOW);
                 if (m_enable_software_debounce)
                 {
@@ -269,7 +267,6 @@ private:
         bool pending_event = false;
         if (is_closed(DebounceSampleMask, swtch.sample_buffer) && swtch.state != SwitchState::CLOSED)
         {
-            const SwitchState oldState                                           = swtch.state;
             swtch.state                                                          = SwitchState::CLOSED;
             m_scancode_event_buffer_closed[m_scancode_event_buffer_closed_len++] = swtch.scancode;
             swtch.sample_buffer                                                  = reset_sample_count(swtch);

@@ -9,7 +9,7 @@
         "cpp"
     ],
     "cmake.configureOnOpen": false,
-    "cmake.buildDirectory": "${workspaceFolder}/test/build/${buildKit}",
+    "cmake.buildDirectory": "${workspaceFolder}/test/build",
     "cmake.sourceDirectory": "${workspaceFolder}/test",
     "cmake.buildBeforeRun": true,
     "cmake.copyCompileCommands": "${workspaceFolder}/.vscode/compile_commands.json",

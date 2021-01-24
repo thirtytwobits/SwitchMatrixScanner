@@ -12,7 +12,8 @@ using ::testing::_;
 #define INPUT 1
 #define INPUT_PULLUP 2
 #define OUTPUT 3
-#define LOW 0
+#define LOW 4
+#define HIGH 5
 
 void digitalWrite(int pin, int level);
 
@@ -55,6 +56,12 @@ public:
         : col{}
         , row{}
     {
+        current_test = nullptr;
+    }
+
+    virtual void SetUp() override
+    {
+        current_test = this;
         memset(pin_state, 0, sizeof(pin_state));
         for (size_t i = 0; i < T::col_count; ++i)
         {
@@ -62,15 +69,10 @@ public:
         }
         for (size_t i = 0; i < T::row_count; ++i)
         {
-            row[i] = i;
+            row[i] = i + T::col_count;
         }
-        current_test = nullptr;
-    }
-
-    virtual void SetUp() override
-    {
-        current_test = this;
-        mock_state.reset(new MockArduinoState());
+        mock_state.reset(new ::testing::NiceMock<MockArduinoState>());
+        ON_CALL(*mock_state, digitalRead(_)).WillByDefault(Return(HIGH));
     }
 
     virtual void TearDown() override
@@ -130,24 +132,58 @@ TYPED_TEST_SUITE_P(SwitchMatrixScannerTest);
 // +--------------------------------------------------------------------------+
 // | TESTS
 // +--------------------------------------------------------------------------+
-/**
- * Verify that we've setup the matrix correctly.
- */
-TYPED_TEST_P(SwitchMatrixScannerTest, Setup)
+TYPED_TEST_P(SwitchMatrixScannerTest, KeyUP)
 {
-    TypeParam         test_subject(this->row, this->col);
+    TypeParam         test_subject(this->row, this->col, true, false);
     MockArduinoState* mock;
     this->get_mock(mock);
-    EXPECT_CALL(*mock, pinMode(_, _)).Times(TypeParam::col_count + TypeParam::row_count);
+    EXPECT_CALL(*mock, digitalRead(this->col[0]))
+        .Times(TypeParam::row_count)
+        .WillRepeatedly(Return(LOW));
+    EXPECT_CALL(*mock, digitalRead(::testing::Ne(this->col[0])))
+        .WillRepeatedly(Return(HIGH));
     test_subject.setup(SwitchMatrixScannerTest<TypeParam>::onSwitchClosed,
                        SwitchMatrixScannerTest<TypeParam>::onSwitchOpen);
+    test_subject.scan();
+    ASSERT_TRUE(test_subject.isSwitchClosed(1));
+}
+
+TYPED_TEST_P(SwitchMatrixScannerTest, SetupPullups)
+{
+    TypeParam         test_subject(this->row, this->col, true);
+    MockArduinoState* mock;
+    this->get_mock(mock);
+    for (size_t i = 0; i < TypeParam::col_count; ++i)
+    {
+        EXPECT_CALL(*mock, pinMode(this->col[i], INPUT_PULLUP));
+    }
+    for (size_t i = 0; i < TypeParam::row_count; ++i)
+    {
+        EXPECT_CALL(*mock, pinMode(this->row[i], INPUT));
+    }
+    test_subject.setup();
+}
+
+TYPED_TEST_P(SwitchMatrixScannerTest, SetupNoPullups)
+{
+    TypeParam         test_subject(this->row, this->col, false);
+    MockArduinoState* mock;
+    this->get_mock(mock);
+    for (size_t i = 0; i < TypeParam::col_count; ++i)
+    {
+        EXPECT_CALL(*mock, pinMode(this->col[i], INPUT));
+    }
+    for (size_t i = 0; i < TypeParam::row_count; ++i)
+    {
+        EXPECT_CALL(*mock, pinMode(this->row[i], INPUT));
+    }
+    test_subject.setup();
 }
 
 // +--------------------------------------------------------------------------+
-REGISTER_TYPED_TEST_SUITE_P(SwitchMatrixScannerTest, Setup);
+REGISTER_TYPED_TEST_SUITE_P(SwitchMatrixScannerTest, SetupPullups, SetupNoPullups, KeyUP);
 
 using MatrixTestTypes = ::testing::Types<gh::thirtytwobits::SwitchMatrixScanner<1, 1>,
-                                         gh::thirtytwobits::SwitchMatrixScanner<2, 2>,
-                                         gh::thirtytwobits::SwitchMatrixScanner<3, 104>>;
+                                         gh::thirtytwobits::SwitchMatrixScanner<2, 3>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(My, SwitchMatrixScannerTest, MatrixTestTypes);
