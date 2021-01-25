@@ -242,8 +242,8 @@ private:
     // | SOFTWARE DEBOUNCING PARAMETERS :: ADJUSTABLE
     // +----------------------------------------------------------------------+
 
-    static constexpr const uint8_t DebounceSettleCount = 4;
-    static constexpr const uint8_t DebounceSampleCount = 3;
+    static constexpr const uint8_t DebounceSettleCount = 1;
+    static constexpr const uint8_t DebounceSampleCount = 2;
     static constexpr const uint8_t DebounceSettleBits  = 3;
     static constexpr const uint8_t DebounceSampleBits  = 5;
 
@@ -260,7 +260,7 @@ private:
     // +----------------------------------------------------------------------+
     static constexpr const uint8_t DebounceSettleShift = DebounceSampleBits;
     static constexpr const uint8_t DebounceSettleMask  = ((1 << DebounceSettleBits) - 1) << DebounceSettleShift;
-    static constexpr const uint8_t DebounceSampleMask  = ((1 << DebounceSampleBits) - 1);
+    static constexpr const uint8_t DebounceSampleMask  = ((1 << DebounceSampleCount) - 1);
     // No sample shift since we always located it in the LSbs.
 
     // +----------------------------------------------------------------------+
