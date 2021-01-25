@@ -25,11 +25,13 @@ void pinMode(int pin, int mode);
 
 struct ArduinoState
 {
-    virtual ~ArduinoState()                       = default;
-    virtual int  digitalRead(int pin) const       = 0;
-    virtual void digitalWrite(int pin, int state) = 0;
-    virtual int  getPinMode(int pin) const        = 0;
-    virtual void pinMode(int pin, int mode)       = 0;
+    virtual ~ArduinoState()                                                      = default;
+    virtual int  digitalRead(int pin) const                                      = 0;
+    virtual void digitalWrite(int pin, int state)                                = 0;
+    virtual int  getPinMode(int pin) const                                       = 0;
+    virtual void pinMode(int pin, int mode)                                      = 0;
+    virtual void onSwitchClosed(const uint16_t* scancodes, size_t scancodes_len) = 0;
+    virtual void onSwitchOpen(const uint16_t* scancodes, size_t scancodes_len)   = 0;
 };
 
 // +--------------------------------------------------------------------------+
@@ -44,6 +46,8 @@ public:
     MOCK_METHOD(void, digitalWrite, (int pin, int state), (override));
     MOCK_METHOD(int, getPinMode, (int pin), (const, override));
     MOCK_METHOD(void, pinMode, (int pin, int mode), (override));
+    MOCK_METHOD(void, onSwitchClosed, (const uint16_t*, size_t), (override));
+    MOCK_METHOD(void, onSwitchOpen, (const uint16_t*, size_t), (override));
 };
 
 std::shared_ptr<MockArduinoState> mock_state;
@@ -96,12 +100,20 @@ public:
 
     static void onSwitchClosed(const uint16_t (&scancodes)[T::event_buffer_size], size_t scancodes_len)
     {
-        ASSERT_NE(current_test, nullptr);
+        SwitchMatrixScannerTest<T>* t = current_test;
+        ASSERT_NE(t, nullptr);
+        MockArduinoState* mock;
+        t->get_mock(mock);
+        mock->onSwitchClosed(scancodes, scancodes_len);
     }
 
     static void onSwitchOpen(const uint16_t (&scancodes)[T::event_buffer_size], size_t scancodes_len)
     {
-        ASSERT_NE(current_test, nullptr);
+        SwitchMatrixScannerTest<T>* t = current_test;
+        ASSERT_NE(t, nullptr);
+        MockArduinoState* mock;
+        t->get_mock(mock);
+        mock->onSwitchOpen(scancodes, scancodes_len);
     }
 };
 
@@ -137,15 +149,17 @@ TYPED_TEST_P(SwitchMatrixScannerTest, KeyUP)
     TypeParam         test_subject(this->row, this->col, true, false);
     MockArduinoState* mock;
     this->get_mock(mock);
-    EXPECT_CALL(*mock, digitalRead(this->col[0]))
-        .Times(TypeParam::row_count)
-        .WillRepeatedly(Return(LOW));
-    EXPECT_CALL(*mock, digitalRead(::testing::Ne(this->col[0])))
-        .WillRepeatedly(Return(HIGH));
+    EXPECT_CALL(*mock, digitalRead(this->col[0])).Times(TypeParam::row_count).WillRepeatedly(Return(LOW));
+    EXPECT_CALL(*mock, digitalRead(::testing::Ne(this->col[0]))).WillRepeatedly(Return(HIGH));
+    EXPECT_CALL(*mock, onSwitchClosed(_, TypeParam::row_count)).Times(1);
     test_subject.setup(SwitchMatrixScannerTest<TypeParam>::onSwitchClosed,
                        SwitchMatrixScannerTest<TypeParam>::onSwitchOpen);
     test_subject.scan();
     ASSERT_TRUE(test_subject.isSwitchClosed(1));
+    EXPECT_CALL(*mock, digitalRead(_)).WillRepeatedly(Return(HIGH));
+    EXPECT_CALL(*mock, onSwitchOpen(_, TypeParam::row_count)).Times(1);
+    test_subject.scan();
+    ASSERT_FALSE(test_subject.isSwitchClosed(1));
 }
 
 TYPED_TEST_P(SwitchMatrixScannerTest, SetupPullups)
@@ -183,7 +197,7 @@ TYPED_TEST_P(SwitchMatrixScannerTest, SetupNoPullups)
 // +--------------------------------------------------------------------------+
 REGISTER_TYPED_TEST_SUITE_P(SwitchMatrixScannerTest, SetupPullups, SetupNoPullups, KeyUP);
 
-using MatrixTestTypes = ::testing::Types<gh::thirtytwobits::SwitchMatrixScanner<1, 1>,
-                                         gh::thirtytwobits::SwitchMatrixScanner<2, 3>>;
+using MatrixTestTypes =
+    ::testing::Types<gh::thirtytwobits::SwitchMatrixScanner<1, 1>, gh::thirtytwobits::SwitchMatrixScanner<2, 3>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(My, SwitchMatrixScannerTest, MatrixTestTypes);

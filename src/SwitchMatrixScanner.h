@@ -339,11 +339,11 @@ private:
         {
             const SwitchState oldState = swtch.state;
             swtch.state                = SwitchState::OPEN;
-            if (oldState == SwitchState::UNKNOWN)
+            if (oldState != SwitchState::UNKNOWN)
             {
                 m_scancode_event_buffer_opened[m_scancode_event_buffer_opened_len++] = swtch.scancode;
                 pending_event                                                        = true;
-            }
+            } // else we ignore the first onKeyUp events.
             swtch.sample_buffer = reset_sample_count(swtch);
         }
         return pending_event;
