@@ -32,8 +32,19 @@ namespace gh
 {
 namespace thirtytwobits
 {
+/**
+ * The type used for 1-based scancodes.
+ */
+using ScanCodeType = uint16_t;
+
+// +--------------------------------------------------------------------------+
+// | INTERNAL STUFF (you can ignore this)
+// +--------------------------------------------------------------------------+
 namespace
 {
+/*
+ * This is used by the SwitchMatrixScanner class internally. You can ignore it.
+ */
 enum SwitchState : uint8_t
 {
     UNKNOWN = 0,
@@ -41,14 +52,50 @@ enum SwitchState : uint8_t
     CLOSED  = 2
 };
 
+/*
+ * This is used by the SwitchMatrixScanner class internally. You can ignore it.
+ */
 struct SwitchDef
 {
-    uint16_t    scancode;
-    SwitchState state;
-    uint8_t     sample_buffer;
+    SwitchDef()
+        : scancode(0)
+        , state(SwitchState::UNKNOWN)
+        , sample_buffer(0)
+    {}
+    ScanCodeType scancode;
+    SwitchState  state;
+    uint8_t      sample_buffer;
+};
+
+/*
+ * All of this is Template Meta-Programming used to initialize the SwitchMatrixScanner internals.
+ * You can ignore it.
+ */
+template <size_t ROW_COUNT, size_t COL_COUNT, typename UpdateType, ScanCodeType scanindex = (ROW_COUNT * COL_COUNT) - 1>
+struct ScanCodeGenerator
+{
+    static constexpr void updateScanItems(UpdateType (&scan_items)[ROW_COUNT][COL_COUNT])
+    {
+        scan_items[scanindex / COL_COUNT][scanindex % COL_COUNT].scancode = scanindex + 1;
+        ScanCodeGenerator<ROW_COUNT, COL_COUNT, UpdateType, scanindex-1>::updateScanItems(scan_items);
+    }
+};
+
+template <size_t ROW_COUNT, size_t COL_COUNT, typename UpdateType>
+struct ScanCodeGenerator<ROW_COUNT, COL_COUNT, UpdateType, 0>
+{
+    static constexpr void updateScanItems(UpdateType (&scan_items)[ROW_COUNT][COL_COUNT])
+    {
+        scan_items[0][0].scancode = 1;
+    }
 };
 };  // namespace
 
+
+
+// +--------------------------------------------------------------------------+
+// | THE MAIN CLASS :: SwitchMatrixScanner
+// +--------------------------------------------------------------------------+
 /**
  * Raw switch matrix scanning logic with optional software debounce for Arduino.
  *
@@ -75,7 +122,7 @@ public:
      *
      * Example:
      *
-     *      void onKeyDown(const uint16_t (&scancodes)[decltype(scanner)::event_buffer_size], size_t scancodes_len)
+     *      void onKeyDown(const ScanCodeType (&scancodes)[decltype(scanner)::event_buffer_size], size_t scancodes_len, void* userdata)
      *      {
      *          for (size_t i = 0; i < scancodes_len; ++i)
      *               {
@@ -84,7 +131,7 @@ public:
      *          }
      *      }
      */
-    using SwitchHandler = void (*)(const uint16_t (&scancodes)[EVENT_BUFFER_SIZE], size_t scancodes_len);
+    using SwitchHandler = void (*)(const ScanCodeType (&scancodes)[EVENT_BUFFER_SIZE], size_t scancodes_len, void* userdata);
 
     static constexpr size_t event_buffer_size = EVENT_BUFFER_SIZE;
     static constexpr size_t row_count         = ROW_COUNT;
@@ -99,7 +146,7 @@ public:
      *                          INPUT will be used with the expectation that the hardware has
      *                          pullups.
      * @param  enable_software_debounce If true then this object will track samples of switches over
-     *                          time adding some hysteresis and deboouncing logic. If false then
+     *                          time adding some hysteresis and debouncing logic. If false then
      *                          the class will use single samples to determine switch state.
      */
     SwitchMatrixScanner(const uint8_t (&row_pins)[ROW_COUNT],
@@ -117,17 +164,11 @@ public:
         , m_scancode_event_buffer_opened_len(0)
         , m_scancode_event_buffer_closed{0}
         , m_scancode_event_buffer_closed_len(0)
+        , m_switchhandler_userdata(nullptr)
     {
+        ScanCodeGenerator<row_count, col_count, SwitchDef>::updateScanItems(m_switch_map);
         memcpy(m_row_pins, row_pins, sizeof(row_pins));
         memcpy(m_col_pins, column_pins, sizeof(column_pins));
-        uint16_t scancode = 1;
-        for (size_t r = 0; r < ROW_COUNT; ++r)
-        {
-            for (size_t c = 0; c < COL_COUNT; ++c)
-            {
-                m_switch_map[r][c] = {scancode++, SwitchState::UNKNOWN, 0};
-            }
-        }
     }
 
     ~SwitchMatrixScanner() {}
@@ -141,7 +182,7 @@ public:
      * from within the scan method. If omitted the sketch must use the isSwitchClosed method to determine
      * switch state.
      */
-    void setup(SwitchHandler switchclosed_handler = nullptr, SwitchHandler switchopen_handler = nullptr)
+    void setup(SwitchHandler switchclosed_handler = nullptr, SwitchHandler switchopen_handler = nullptr, void* userdata = nullptr)
     {
         m_switchhandler_closed = switchclosed_handler;
         m_switchhandler_open   = switchopen_handler;
@@ -154,15 +195,19 @@ public:
         {
             pinMode(m_col_pins[c], m_column_input_type);
         }
+        m_switchhandler_userdata = userdata;
     }
 
     /**
      * Call from within the Arduino loop method. When debouncing is enabled it is important to call
      * this in a fast loop and at a regular period. Variable timing will cause weird delays to users
      * of a keyboard where some keystrokes will be missed or will occur late.
+     * 
+     * @return true if anything changed else false.
      */
-    void scan()
+    bool scan()
     {
+        bool found_changes = false;
         for (size_t r = 0; r < ROW_COUNT; ++r)
         {
             const uint8_t rowpin = m_row_pins[r];
@@ -171,7 +216,7 @@ public:
             for (size_t c = 0; c < COL_COUNT; ++c)
             {
                 SwitchDef& swtch = m_switch_map[r][c];
-                // Always sample to ensure the timing is stable despite hyteresis settings.
+                // Always sample to ensure the timing is stable despite hysteresis settings.
                 const int  value             = digitalRead(m_col_pins[c]);
                 const bool is_switch_pressed = (value == LOW);
                 if (m_enable_software_debounce)
@@ -187,6 +232,7 @@ public:
                 }
                 if (handleSwitchState(swtch))
                 {
+                    found_changes = true;
                     if (m_scancode_event_buffer_closed_len == EVENT_BUFFER_SIZE)
                     {
                         // We're about to overrun our event buffer so we'll have to flush
@@ -201,11 +247,12 @@ public:
                     }
                 }
             }
-            // High-impedence
+            // High-impedance
             pinMode(rowpin, INPUT);
         }
         flush_closed_events();
         flush_opened_events();
+        return found_changes;
     }
 
     /**
@@ -221,19 +268,19 @@ public:
      *     | 7 | 8 | 9 |
      *     +-----------+
      */
-    bool isSwitchClosed(uint16_t scancode)
+    bool isSwitchClosed(ScanCodeType scancode)
     {
         if (scancode == 0)
         {
             return false;
         }
-        const uint16_t scanindex = scancode - 1;
+        const ScanCodeType scanindex = scancode - 1;
         if (scanindex >= ROW_COUNT * COL_COUNT)
         {
             return false;
         }
-        const uint16_t row = scanindex / COL_COUNT;
-        const uint16_t col = scanindex - (row * COL_COUNT);
+        const ScanCodeType row = scanindex / COL_COUNT;
+        const ScanCodeType col = scanindex - (row * COL_COUNT);
         return (m_switch_map[row][col].state == SwitchState::CLOSED);
     }
 
@@ -349,21 +396,21 @@ private:
         return pending_event;
     }
 
-    void onSwitchClosed(const uint16_t (&scancodes)[EVENT_BUFFER_SIZE], size_t scancodes_len)
+    void onSwitchClosed(const ScanCodeType (&scancodes)[EVENT_BUFFER_SIZE], size_t scancodes_len)
     {
         const SwitchHandler switchhandler_closed = m_switchhandler_closed;
         if (switchhandler_closed != nullptr)
         {
-            switchhandler_closed(scancodes, scancodes_len);
+            switchhandler_closed(scancodes, scancodes_len, m_switchhandler_userdata);
         }
     }
 
-    void onSwitchOpen(const uint16_t (&scancodes)[EVENT_BUFFER_SIZE], size_t scancodes_len)
+    void onSwitchOpen(const ScanCodeType (&scancodes)[EVENT_BUFFER_SIZE], size_t scancodes_len)
     {
         const SwitchHandler switchhandler_open = m_switchhandler_open;
         if (switchhandler_open != nullptr)
         {
-            switchhandler_open(scancodes, scancodes_len);
+            switchhandler_open(scancodes, scancodes_len, m_switchhandler_userdata);
         }
     }
 
@@ -374,10 +421,11 @@ private:
     SwitchHandler m_switchhandler_open;
     const uint8_t m_column_input_type;
     const bool    m_enable_software_debounce;
-    uint16_t      m_scancode_event_buffer_opened[EVENT_BUFFER_SIZE];
+    ScanCodeType  m_scancode_event_buffer_opened[EVENT_BUFFER_SIZE];
     size_t        m_scancode_event_buffer_opened_len;
-    uint16_t      m_scancode_event_buffer_closed[EVENT_BUFFER_SIZE];
+    ScanCodeType  m_scancode_event_buffer_closed[EVENT_BUFFER_SIZE];
     size_t        m_scancode_event_buffer_closed_len;
+    void*         m_switchhandler_userdata;
 };
 
 };  // namespace thirtytwobits
